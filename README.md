@@ -32,6 +32,10 @@ data instance. If there is a blank line, your program should skip it
 
 <!-- ### Functions -->
 
+## Future Works
+1. Input data pre-processing
+2. Arguments reading
+
 ## Contributing
 1. Fork it!
 2. Create your feature branch: `git checkout -b my-new-feature`

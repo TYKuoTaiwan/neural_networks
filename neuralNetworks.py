@@ -7,106 +7,116 @@ import math
 #   "d_" as a variable prefix means "derivative"
 #   "_wrt_" is shorthand for "with respect to"
 #   "w_ho" and "w_ih" are the index of weights from hidden to output layer neurons and input to hidden layer neurons respectively
-#
-# Comment references:
-#
-# [1] Wikipedia article on Backpropagation
-#   http://en.wikipedia.org/wiki/Backpropagation#Finding_the_derivative_of_the_error
-# [2] Neural Networks for Machine Learning course on Coursera by Geoffrey Hinton
-#   https://class.coursera.org/neuralnets-2012-001/lecture/39
-# [3] The Back Propagation Algorithm
-#   https://www4.rgu.ac.uk/files/chapter3%20-%20bp.pdf
 
 class NeuralNetwork:
     LEARNING_RATE = 0.5
 
-    def __init__(self, num_inputs, num_hidden, num_outputs, hidden_layer_weights = None, hidden_layer_bias = None, output_layer_weights = None, output_layer_bias = None):
+    def __init__(self, num_inputs, num_hiddenLayers, num_hidden_neuron, num_outputs_neuron):
         self.num_inputs = num_inputs
+        self.num_hiddenLayers = num_hiddenLayers
+        self.num_hidden_neuron = num_hidden_neuron
+        self.num_outputs_neuron = num_outputs_neuron
 
-        self.hidden_layer = NeuronLayer(num_hidden, hidden_layer_bias)
-        self.output_layer = NeuronLayer(num_outputs, output_layer_bias)
+        self.hidden_layer = []
+        for hNum in range(num_hiddenLayers):
+            self.hidden_layer.append(NeuronLayer(num_hidden_neuron[hNum]))
+        self.output_layer = NeuronLayer(num_outputs_neuron)
 
-        self.init_weights_from_inputs_to_hidden_layer_neurons(hidden_layer_weights)
-        self.init_weights_from_hidden_layer_neurons_to_output_layer_neurons(output_layer_weights)
+        self.init_weights_from_inputs_to_hidden_layer_neurons()
+        self.init_weights_from_hidden_layer_neurons_to_output_layer_neurons()
 
-    def init_weights_from_inputs_to_hidden_layer_neurons(self, hidden_layer_weights):
-        weight_num = 0
-        for h in range(len(self.hidden_layer.neurons)):
-            for i in range(self.num_inputs):
-                if not hidden_layer_weights:
-                    self.hidden_layer.neurons[h].weights.append(random.random())
+    def init_weights_from_inputs_to_hidden_layer_neurons(self):
+        for hNum in range(self.num_hiddenLayers):
+            for h in range(self.num_hidden_neuron[hNum]):
+                if hNum==0:
+                    for i in range(self.num_inputs):
+                        self.hidden_layer[hNum].neurons[h].weights.append(random.random())
                 else:
-                    self.hidden_layer.neurons[h].weights.append(hidden_layer_weights[weight_num])
-                weight_num += 1
+                    for i in range(len(self.hidden_layer[hNum-1].neurons)):
+                        self.hidden_layer[hNum].neurons[h].weights.append(random.random())
 
-    def init_weights_from_hidden_layer_neurons_to_output_layer_neurons(self, output_layer_weights):
-        weight_num = 0
-        for o in range(len(self.output_layer.neurons)):
-            for h in range(len(self.hidden_layer.neurons)):
-                if not output_layer_weights:
-                    self.output_layer.neurons[o].weights.append(random.random())
-                else:
-                    self.output_layer.neurons[o].weights.append(output_layer_weights[weight_num])
-                weight_num += 1
+    def init_weights_from_hidden_layer_neurons_to_output_layer_neurons(self):
+        for o in range(self.num_outputs_neuron):
+            for h in range(self.num_hidden_neuron[self.num_hiddenLayers-1]):
+                self.output_layer.neurons[o].weights.append(random.random())
 
     def inspect(self):
         print('------')
         print('* Inputs: {}'.format(self.num_inputs))
         print('------')
-        print('Hidden Layer')
-        self.hidden_layer.inspect()
+        print('Hidden Layers: ', len(self.hidden_layer))
+        for h in range(len(self.hidden_layer)):
+            print('------')
+            print('Hidden Layer', h)
+            print('  Bias:', self.hidden_layer[h].bias)
+            self.hidden_layer[h].inspect()
         print('------')
         print('* Output Layer')
         self.output_layer.inspect()
         print('------')
 
     def feed_forward(self, inputs):
-        hidden_layer_outputs = self.hidden_layer.feed_forward(inputs)
-        return self.output_layer.feed_forward(hidden_layer_outputs)
+        layerInputs = inputs;
+        for hNum in range(self.num_hiddenLayers):
+            hidden_layer_outputs = self.hidden_layer[hNum].feed_forward(layerInputs)
+            layerInputs = hidden_layer_outputs
+        return self.output_layer.feed_forward(layerInputs)
 
     # Uses online learning, ie updating the weights after each training case
-    def train(self, training_inputs, training_outputs):
+    def train(self, training_inputs, training_outputs):##
         self.feed_forward(training_inputs)
 
         # 1. Output neuron deltas
-        pd_errors_wrt_output_neuron_total_net_input = [0] * len(self.output_layer.neurons)
-        for o in range(len(self.output_layer.neurons)):
+        for o in range(self.num_outputs_neuron):
 
             # ∂E/∂zⱼ
-            pd_errors_wrt_output_neuron_total_net_input[o] = self.output_layer.neurons[o].calculate_pd_error_wrt_total_net_input(training_outputs[o])
+           self.output_layer.neurons[o].delta = self.output_layer.neurons[o].calculate_pd_error_wrt_total_net_input(training_outputs[o])
 
         # 2. Hidden neuron deltas
-        pd_errors_wrt_hidden_neuron_total_net_input = [0] * len(self.hidden_layer.neurons)
-        for h in range(len(self.hidden_layer.neurons)):
+        for hNum in reversed(range(self.num_hiddenLayers)):
+            if hNum==self.num_hiddenLayers-1:
+                for h in range(self.num_hidden_neuron[hNum]):
 
-            # We need to calculate the derivative of the error with respect to the output of each hidden layer neuron
-            # dE/dyⱼ = Σ ∂E/∂zⱼ * ∂z/∂yⱼ = Σ ∂E/∂zⱼ * wᵢⱼ
-            d_error_wrt_hidden_neuron_output = 0
-            for o in range(len(self.output_layer.neurons)):
-                d_error_wrt_hidden_neuron_output += pd_errors_wrt_output_neuron_total_net_input[o] * self.output_layer.neurons[o].weights[h]
+                    # We need to calculate the derivative of the error with respect to the output of each hidden layer neuron
+                    # dE/dyⱼ = Σ ∂E/∂zⱼ * ∂z/∂yⱼ = Σ ∂E/∂zⱼ * wᵢⱼ
+                    d_error_wrt_hidden_neuron_output = 0
+                    for o in range(self.num_outputs_neuron):
+                        d_error_wrt_hidden_neuron_output += self.output_layer.neurons[o].delta * self.output_layer.neurons[o].weights[h]
 
-            # ∂E/∂zⱼ = dE/dyⱼ * ∂zⱼ/∂
-            pd_errors_wrt_hidden_neuron_total_net_input[h] = d_error_wrt_hidden_neuron_output * self.hidden_layer.neurons[h].calculate_pd_total_net_input_wrt_input()
+                    # ∂E/∂zⱼ = dE/dyⱼ * ∂zⱼ/∂
+                    self.hidden_layer[hNum].neurons[h].delta = d_error_wrt_hidden_neuron_output * self.hidden_layer[hNum].neurons[h].calculate_pd_total_net_input_wrt_input()        
+            else:
+                for h in range(self.num_hidden_neuron[hNum]):
+
+                    # We need to calculate the derivative of the error with respect to the output of each hidden layer neuron
+                    # dE/dyⱼ = Σ ∂E/∂zⱼ * ∂z/∂yⱼ = Σ ∂E/∂zⱼ * wᵢⱼ
+                    d_error_wrt_hidden_neuron_output = 0
+                    for o in range(self.num_hidden_neuron[hNum+1]):
+                        d_error_wrt_hidden_neuron_output += self.hidden_layer[hNum+1].neurons[o].delta * self.hidden_layer[hNum+1].neurons[o].weights[h]
+
+                    # ∂E/∂zⱼ = dE/dyⱼ * ∂zⱼ/∂
+                    self.hidden_layer[hNum].neurons[h].delta = d_error_wrt_hidden_neuron_output * self.hidden_layer[hNum].neurons[h].calculate_pd_total_net_input_wrt_input()
 
         # 3. Update output neuron weights
-        for o in range(len(self.output_layer.neurons)):
+        for o in range(self.num_outputs_neuron):
             for w_ho in range(len(self.output_layer.neurons[o].weights)):
 
                 # ∂Eⱼ/∂wᵢⱼ = ∂E/∂zⱼ * ∂zⱼ/∂wᵢⱼ
-                pd_error_wrt_weight = pd_errors_wrt_output_neuron_total_net_input[o] * self.output_layer.neurons[o].calculate_pd_total_net_input_wrt_weight(w_ho)
+                pd_error_wrt_weight = self.output_layer.neurons[o].delta * self.output_layer.neurons[o].calculate_pd_total_net_input_wrt_weight(w_ho)
 
                 # Δw = α * ∂Eⱼ/∂wᵢ
                 self.output_layer.neurons[o].weights[w_ho] -= self.LEARNING_RATE * pd_error_wrt_weight
 
         # 4. Update hidden neuron weights
-        for h in range(len(self.hidden_layer.neurons)):
-            for w_ih in range(len(self.hidden_layer.neurons[h].weights)):
+        for hNum in reversed(range(self.num_hiddenLayers)):
+            for h in range(self.num_hidden_neuron[hNum]):
+                for w_ih in range(len(self.hidden_layer[hNum].neurons[h].weights)):
 
-                # ∂Eⱼ/∂wᵢ = ∂E/∂zⱼ * ∂zⱼ/∂wᵢ
-                pd_error_wrt_weight = pd_errors_wrt_hidden_neuron_total_net_input[h] * self.hidden_layer.neurons[h].calculate_pd_total_net_input_wrt_weight(w_ih)
+                    # ∂Eⱼ/∂wᵢ = ∂E/∂zⱼ * ∂zⱼ/∂wᵢ
+                    pd_error_wrt_weight = self.hidden_layer[hNum].neurons[h].delta * self.hidden_layer[hNum].neurons[h].calculate_pd_total_net_input_wrt_weight(w_ih)
 
-                # Δw = α * ∂Eⱼ/∂wᵢ
-                self.hidden_layer.neurons[h].weights[w_ih] -= self.LEARNING_RATE * pd_error_wrt_weight
+                    # Δw = α * ∂Eⱼ/∂wᵢ
+                    self.hidden_layer[hNum].neurons[h].weights[w_ih] -= self.LEARNING_RATE * pd_error_wrt_weight
 
     def calculate_total_error(self, training_sets):
         total_error = 0
@@ -118,22 +128,21 @@ class NeuralNetwork:
         return total_error
 
 class NeuronLayer:
-    def __init__(self, num_neurons, bias):
+    def __init__(self, num_neurons):
 
         # Every neuron in a layer shares the same bias
-        self.bias = bias if bias else random.random()
+        self.bias = random.random()
 
         self.neurons = []
         for i in range(num_neurons):
             self.neurons.append(Neuron(self.bias))
 
     def inspect(self):
-        print('Neurons:', len(self.neurons))
+        print(' Neurons:', len(self.neurons))
         for n in range(len(self.neurons)):
-            print(' Neuron', n)
+            print('  Neuron', n)
             for w in range(len(self.neurons[n].weights)):
-                print('  Weight:', self.neurons[n].weights[w])
-            print('  Bias:', self.bias)
+                print('   Weight', w, ':', self.neurons[n].weights[w])
 
     def feed_forward(self, inputs):
         outputs = []
@@ -151,6 +160,7 @@ class Neuron:
     def __init__(self, bias):
         self.bias = bias
         self.weights = []
+        self.delta = 0
 
     def calculate_output(self, inputs):
         self.inputs = inputs
@@ -214,26 +224,14 @@ class Neuron:
     def calculate_pd_total_net_input_wrt_weight(self, index):
         return self.inputs[index]
 
-###
-
 # Blog post example:
-nn = NeuralNetwork(2, 2, 2, hidden_layer_weights=[0.15, 0.2, 0.25, 0.3], hidden_layer_bias=0.35, output_layer_weights=[0.4, 0.45, 0.5, 0.55], output_layer_bias=0.6)
+nn = NeuralNetwork(2, 4, [2, 2, 3, 4], 2)
 nn.inspect();
-for i in range(10000):
+errorTolerance = 0.002
+numIter = 10000;
+for i in range(numIter):
     nn.train([0.05, 0.1], [0.01, 0.99])
-    print(i, round(nn.calculate_total_error([[[0.05, 0.1], [0.01, 0.99]]]), 9))
-
-# XOR example:
-
-# training_sets = [
-#     [[0, 0], [0]],
-#     [[0, 1], [1]],
-#     [[1, 0], [1]],
-#     [[1, 1], [0]]
-# ]
-# print (len(training_sets[0][0]), 5, len(training_sets[0][1]))
-# nn = NeuralNetwork(len(training_sets[0][0]), 5, len(training_sets[0][1]))
-# for i in range(10000):
-#     training_inputs, training_outputs = random.choice(training_sets)
-#     nn.train(training_inputs, training_outputs)
-#     print(i, nn.calculate_total_error(training_sets))
+    error = round(nn.calculate_total_error([[[0.05, 0.1], [0.01, 0.99]]]), 9)
+    if error<errorTolerance or i==numIter-1:
+        print("Total training error =", error)
+        break
