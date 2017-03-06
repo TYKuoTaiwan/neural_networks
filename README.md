@@ -35,6 +35,8 @@ data instance. If there is a blank line, your program should skip it
 ## Future Works
 1. Input data pre-processing
 2. Arguments reading
+3. Test function implement
+4. Test with some data sets
 
 ## Contributing
 1. Fork it!
